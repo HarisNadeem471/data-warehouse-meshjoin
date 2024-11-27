@@ -1,0 +1,61 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+public class MySQLConnectionTest {
+    public static void main(String[] args) {
+        // Database credentials
+        String url = "jdbc:mysql://localhost:3306/metro_dw"; // Replace with your database name
+        String user = "root"; // Replace with your MySQL username
+        String password = "12345"; // Replace with your MySQL password
+
+        // SQL Queries
+        String queryCustomers = "SELECT * FROM dim_customers;";
+        String queryProducts = "SELECT * FROM dim_products;";
+
+        // Attempt to connect and execute queries
+        try {
+            // Establish connection
+            Connection connection = DriverManager.getConnection(url, user, password);
+            System.out.println("Connected to MySQL database!");
+
+            // Create a statement object
+            Statement statement = connection.createStatement();
+
+            // Execute and display results from dim_customers
+            System.out.println("\nQuerying dim_customers:");
+            ResultSet resultSetCustomers = statement.executeQuery(queryCustomers);
+            while (resultSetCustomers.next()) {
+                int customerId = resultSetCustomers.getInt("CUSTOMER_ID");
+                String customerName = resultSetCustomers.getString("CUSTOMER_NAME");
+                String gender = resultSetCustomers.getString("GENDER");
+                System.out.println("CUSTOMER_ID: " + customerId + ", CUSTOMER_NAME: " + customerName + ", GENDER: " + gender);
+            }
+
+            // Execute and display results from dim_products
+            System.out.println("\nQuerying dim_products:");
+            ResultSet resultSetProducts = statement.executeQuery(queryProducts);
+            while (resultSetProducts.next()) {
+                int productId = resultSetProducts.getInt("productID");
+                String productName = resultSetProducts.getString("productName");
+                double productPrice = resultSetProducts.getDouble("productPrice");
+                int supplierId = resultSetProducts.getInt("supplierID");
+                String supplierName = resultSetProducts.getString("supplierName");
+                int storeId = resultSetProducts.getInt("storeID");
+                String storeName = resultSetProducts.getString("storeName");
+                System.out.println("productID: " + productId + ", productName: " + productName + 
+                                   ", productPrice: " + productPrice + ", supplierID: " + supplierId + 
+                                   ", supplierName: " + supplierName + ", storeID: " + storeId + 
+                                   ", storeName: " + storeName);
+            }
+
+            // Close connection
+            connection.close();
+        } catch (SQLException e) {
+            System.out.println("Connection failed!");
+            e.printStackTrace();
+        }
+    }
+}

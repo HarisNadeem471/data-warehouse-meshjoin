@@ -1,0 +1,51 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+public class MySQLConnectionTest {
+    public static void main(String[] args) {
+        // Database credentials
+        String url = "jdbc:mysql://localhost:3306/metro_dw"; // Replace with your database name
+        String user = "root"; // Replace with your MySQL username
+        String password = "12345"; // Replace with your MySQL password
+
+        // SQL queries to execute
+        String query1 = "SELECT * FROM `customers_data (1)`;";
+        String query2 = "SELECT * FROM `products_data (1)`;";
+
+        try (Connection connection = DriverManager.getConnection(url, user, password)) {
+            System.out.println("Connected to MySQL database!");
+
+            // Create a Statement object to execute the queries
+            Statement statement = connection.createStatement();
+
+            // Execute Query 1: Customers data
+            System.out.println("\n--- Customers Data ---");
+            ResultSet result1 = statement.executeQuery(query1);
+            while (result1.next()) {
+                System.out.println("Customer ID: " + result1.getInt("CUSTOMER_ID") + 
+                                   ", Name: " + result1.getString("CUSTOMER_NAME") +
+                                   ", Gender: " + result1.getString("GENDER"));
+            }
+
+            // Execute Query 2: Products data
+            System.out.println("\n--- Products Data ---");
+            ResultSet result2 = statement.executeQuery(query2);
+            while (result2.next()) {
+                System.out.println("Product ID: " + result2.getInt("productID") + 
+                                   ", Name: " + result2.getString("productName") +
+                                   ", Price: " + result2.getDouble("productPrice") +
+                                   ", Supplier ID: " + result2.getInt("supplierID") +
+                                   ", Supplier Name: " + result2.getString("supplierName") +
+                                   ", Store ID: " + result2.getInt("storeID") +
+                                   ", Store Name: " + result2.getString("storeName"));
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Connection or query execution failed!");
+            e.printStackTrace();
+        }
+    }
+}

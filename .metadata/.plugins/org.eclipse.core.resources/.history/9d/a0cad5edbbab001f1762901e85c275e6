@@ -1,0 +1,162 @@
+import java.io.*;
+import java.sql.*;
+import java.util.*;
+
+public class MySQLConnectionTest {
+    private static final int CHUNK_SIZE = 50; // Number of transaction rows per chunk
+    private static final int PARTITION_SIZE = 50; // Number of rows per MD partition
+
+    public static void main(String[] args) {
+        // Database credentials
+        String dbUrl = "jdbc:mysql://localhost:3306/metro_dw";
+        String dbUser = "root";
+        String dbPassword = "12345";
+
+        // Paths for input and output files
+        String transactionsFile = "C:\\Users\\Muhammad\\Desktop\\Datawarehouse_metro\\MySQLConnectionTest\\src\\transactions.csv"; // Input file path
+        String enrichedOutputFile = "enriched_transactions.csv"; // Output file path
+
+        try (Connection conn = DriverManager.getConnection(dbUrl, dbUser, dbPassword)) {
+            System.out.println("Connected to MySQL database!");
+
+            // Create output file writer
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(enrichedOutputFile))) {
+                // Write header to the output file
+                writer.write("ORDER_ID,ORDER_DATE,PRODUCT_ID,PRODUCT_NAME,PRODUCT_PRICE,CUSTOMER_ID,CUSTOMER_NAME,GENDER,QUANTITY,TOTAL_SALE");
+                writer.newLine();
+
+                int transactionOffset = 0;
+                boolean moreTransactions = true;
+
+                // Process transactions in chunks
+                while (moreTransactions) {
+                    // Load the current chunk of transactions
+                    List<Map<String, String>> transactionChunk = loadTransactionChunk(transactionsFile, CHUNK_SIZE, transactionOffset);
+
+                    // If no transactions are left, stop the loop
+                    if (transactionChunk.isEmpty()) {
+                        moreTransactions = false;
+                        break;
+                    }
+
+                    // Process each partition of MD
+                    for (int i = 0; i < PARTITION_SIZE; i++) {
+                        // Load customer and product data into memory (disk buffer)
+                        Map<Integer, String[]> customerPartition = loadCustomerPartition(conn, i, PARTITION_SIZE);
+                        Map<Integer, String[]> productPartition = loadProductPartition(conn, i, PARTITION_SIZE);
+
+                        // Join transaction data with MD
+                        for (Map<String, String> transaction : transactionChunk) {
+                            int productId = Integer.parseInt(transaction.get("PRODUCT_ID"));
+                            int customerId = Integer.parseInt(transaction.get("CUSTOMER_ID"));
+
+                            String[] customerData = customerPartition.get(customerId);
+                            String[] productData = productPartition.get(productId);
+
+                            if (customerData != null && productData != null) {
+                                // Enrich transaction data
+                                String priceString = productData[1]; // productPrice from product data
+                                double price = 0.0;
+                                if (priceString != null && priceString.contains("$")) {
+                                    price = Double.parseDouble(priceString.replace("$", "")); // Remove $ and parse as double
+                                } else {
+                                    price = Double.parseDouble(priceString); // If there's no $ sign, parse normally
+                                }
+
+                                int quantity = Integer.parseInt(transaction.get("QUANTITY"));
+                                double totalSale = price * quantity;
+
+                                // Write enriched transaction to the output file
+                                writer.write(transaction.get("ORDER_ID") + "," +
+                                        transaction.get("ORDER_DATE") + "," +
+                                        productId + "," +
+                                        productData[0] + "," + // Product Name
+                                        price + "," +
+                                        customerId + "," +
+                                        customerData[0] + "," + // Customer Name
+                                        customerData[1] + "," + // Gender
+                                        quantity + "," +
+                                        totalSale);
+                                writer.newLine();
+                            }
+                        }
+                    }
+
+                    // Increment the offset to move to the next chunk
+                    transactionOffset += CHUNK_SIZE;
+                }
+
+                System.out.println("MESHJOIN completed! Enriched data saved to " + enrichedOutputFile);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Load a single chunk of transactions from the CSV file
+    private static List<Map<String, String>> loadTransactionChunk(String filePath, int chunkSize, int offset) throws IOException {
+        List<Map<String, String>> chunk = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            int count = 0;
+            int currentRow = 0;
+
+            while ((line = reader.readLine()) != null) {
+                if (currentRow < offset) {
+                    currentRow++; // Skip rows until the offset
+                    continue;
+                }
+
+                if (count >= chunkSize) {
+                    break; // Stop when the chunk size is reached
+                }
+
+                String[] fields = line.split(",");
+                Map<String, String> transaction = new HashMap<>();
+                transaction.put("ORDER_ID", fields[0]);
+                transaction.put("ORDER_DATE", fields[1]);
+                transaction.put("PRODUCT_ID", fields[2]);
+                transaction.put("CUSTOMER_ID", fields[3]);
+                transaction.put("QUANTITY", fields[4]);
+
+                chunk.add(transaction);
+                count++;
+                currentRow++;
+            }
+        }
+        return chunk;
+    }
+
+    // Load a partition of customer data into memory
+    private static Map<Integer, String[]> loadCustomerPartition(Connection conn, int partitionIndex, int partitionSize) throws SQLException {
+        Map<Integer, String[]> customerPartition = new HashMap<>();
+        String query = "SELECT * FROM `customers_data (1)` LIMIT ? OFFSET ?";
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setInt(1, partitionSize);
+            stmt.setInt(2, partitionIndex * partitionSize);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                customerPartition.put(rs.getInt("CUSTOMER_ID"),
+                        new String[]{rs.getString("CUSTOMER_NAME"), rs.getString("GENDER")});
+            }
+        }
+        return customerPartition;
+    }
+
+    // Load a partition of product data into memory
+    private static Map<Integer, String[]> loadProductPartition(Connection conn, int partitionIndex, int partitionSize) throws SQLException {
+        Map<Integer, String[]> productPartition = new HashMap<>();
+        String query = "SELECT * FROM `products_data (1)` LIMIT ? OFFSET ?";
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setInt(1, partitionSize);
+            stmt.setInt(2, partitionIndex * partitionSize);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                productPartition.put(rs.getInt("productID"),
+                        new String[]{rs.getString("productName"), rs.getString("productPrice")});
+            }
+        }
+        return productPartition;
+    }
+}

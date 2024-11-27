@@ -1,0 +1,60 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+public class MySQLConnectionTest {
+    public static void main(String[] args) {
+        // Database credentials
+        String url = "jdbc:mysql://localhost:3306/metro_dw"; // Replace with your database name
+        String user = "root"; // Replace with your MySQL username
+        String password = "12345"; // Replace with your MySQL password
+
+        // SQL queries to execute
+        String queryCustomers = "SELECT * FROM `customers_data (1)`;";
+        String queryProducts = "SELECT * FROM `products_data (1)`;";
+
+        // Try-with-resources to manage database resources automatically
+        try (Connection connection = DriverManager.getConnection(url, user, password);
+             Statement statement = connection.createStatement()) {
+
+            // Connection successful
+            System.out.println("Connected to MySQL database!");
+
+            // Execute Query 1: Customers data
+            System.out.println("\n--- Customers Data ---");
+            try (ResultSet result1 = statement.executeQuery(queryCustomers)) {
+                while (result1.next()) {
+                    System.out.println("Customer ID: " + result1.getInt("CUSTOMER_ID") + 
+                                       ", Name: " + result1.getString("CUSTOMER_NAME") +
+                                       ", Gender: " + result1.getString("GENDER"));
+                }
+            }
+
+            // Execute Query 2: Products data
+            System.out.println("\n--- Products Data ---");
+            try (ResultSet result2 = statement.executeQuery(queryProducts)) {
+                while (result2.next()) {
+                    // Get price as a string, remove "$", and parse it to double
+                    String priceString = result2.getString("productPrice"); // Assuming this column contains $ symbols
+                    double price = Double.parseDouble(priceString.replace("$", ""));
+
+                    // Display product data
+                    System.out.println("Product ID: " + result2.getInt("productID") + 
+                                       ", Name: " + result2.getString("productName") +
+                                       ", Price: " + price + // Parsed price without $
+                                       ", Supplier ID: " + result2.getInt("supplierID") +
+                                       ", Supplier Name: " + result2.getString("supplierName") +
+                                       ", Store ID: " + result2.getInt("storeID") +
+                                       ", Store Name: " + result2.getString("storeName"));
+                }
+            }
+
+        } catch (SQLException e) {
+            // Handle SQL exceptions
+            System.out.println("Connection or query execution failed!");
+            e.printStackTrace();
+        }
+    }
+}
